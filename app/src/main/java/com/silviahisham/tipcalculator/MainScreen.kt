@@ -17,6 +17,7 @@ import androidx.compose.material.Slider
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,6 +31,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.silviahisham.tipcalculator.ui.theme.Purple100
 import com.silviahisham.tipcalculator.ui.theme.TipCalculatorTheme
+import com.silviahisham.tipcalculator.utils.calculateTip
+import com.silviahisham.tipcalculator.utils.calculateTotalPerPerson
 import com.silviahisham.tipcalculator.widgets.RoundIconButton
 
 val space = 8.dp
@@ -37,16 +40,24 @@ val doubleSpace = 16.dp
 
 @Composable
 fun MainScreen() {
+    val totalAmountState = remember { mutableStateOf(0F) }
+
+    val billState = remember { mutableStateOf("") }
+    val splitByState = remember { mutableStateOf(1) }
+    val sliderState = remember { mutableStateOf(0F) }
+    val tipAmount = remember { mutableStateOf(0F) }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopHeader()
-            BillForm()
+            TopHeader(totalAmountState)
+            BillForm(billState, splitByState, sliderState, tipAmount, totalAmountState)
         }
     }
 }
 
 @Composable
-fun TopHeader(total: Float = 0F) {
+fun TopHeader(total: MutableState<Float>) {
+    val totalFormatted = "%.1f".format(total.value)
     Surface(
         modifier = Modifier
             .height(150.dp)
@@ -58,7 +69,7 @@ fun TopHeader(total: Float = 0F) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(text = stringResource(id = R.string.header_title), style = MaterialTheme.typography.h6)
             Text(
-                text = "$$total",
+                text = "$$totalFormatted",
                 style = MaterialTheme.typography.h5,
                 fontWeight = FontWeight.Bold
             )
@@ -67,13 +78,15 @@ fun TopHeader(total: Float = 0F) {
 }
 
 @Composable
-fun BillForm() {
-    val billState = remember {
-        mutableStateOf("")
-    }
-    val tipPercentage = remember {
-        mutableStateOf(0F)
-    }
+fun BillForm(
+    billState: MutableState<String>,
+    splitByState: MutableState<Int>,
+    sliderState: MutableState<Float>,
+    tipAmountState: MutableState<Float>,
+    total: MutableState<Float>
+) {
+    val tipPercentage = (sliderState.value * 100).toInt()
+
     Surface(
         modifier = Modifier
             .padding(space)
@@ -110,11 +123,17 @@ fun BillForm() {
             ) {
                 Text(text = "Split")
                 RoundIconButton(icon = painterResource(id = R.drawable.ic_baseline_remove_24), onClick = {
-                    //TODO
+                    if (splitByState.value > 1) splitByState.value--
+                    billState.value.toFloatOrNull()?.let { bill ->
+                        total.value = calculateTotalPerPerson(bill, tipAmountState.value, splitByState.value)
+                    }
                 })
-                Text(text = "0")
+                Text(text = splitByState.value.toString())
                 RoundIconButton(icon = painterResource(id = R.drawable.ic_baseline_add_24), onClick = {
-                    //TODO
+                    splitByState.value++
+                    billState.value.toFloatOrNull()?.let { bill ->
+                        total.value = calculateTotalPerPerson(bill, tipAmountState.value, splitByState.value)
+                    }
                 })
             }
             // Tip Row
@@ -126,7 +145,7 @@ fun BillForm() {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = "Tip")
-                Text(text = "$10")
+                Text(text = "$${tipAmountState.value}")
             }
             // Slider
             Column(
@@ -135,10 +154,17 @@ fun BillForm() {
                     .padding(top = doubleSpace),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = "10%")
+                Text(text = "${tipPercentage}%")
                 Slider(
-                    value = tipPercentage.value,
-                    onValueChange = { tipPercentage.value = it },
+                    value = sliderState.value,
+                    onValueChange = {
+                        sliderState.value = it
+
+                        billState.value.toFloatOrNull()?.let { bill ->
+                            tipAmountState.value = calculateTip(bill, tipPercentage)
+                            total.value = calculateTotalPerPerson(bill, tipAmountState.value, splitByState.value)
+                        }
+                    },
                     steps = 10
                 )
             }
